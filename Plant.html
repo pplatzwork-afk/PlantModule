@@ -10,30 +10,34 @@
     .btn { padding: 0.6em 1em; background: #4caf50; color: white; border: none; border-radius: 6px; cursor: pointer; }
     .btn:hover { background: #388e3c; }
     .summary { font-weight: bold; margin-bottom: 1em; font-size: 1.1em; }
-    .card { background: white; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); padding: 1em; margin-bottom: 1em; display: flex; gap: 1em; align-items: center; cursor: pointer; transition: background 0.2s ease; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1em; }
+    .card { background: white; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); padding: 1em; display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: background 0.2s ease; }
     .card:hover { background: #e8f5e9; }
-    .card img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; border: 1px solid #ccc; }
-    .card-content { flex: 1; }
+    .card img { width: 100%; height: 150px; object-fit: cover; border-radius: 8px; border: 1px solid #ccc; margin-bottom: 0.5em; }
     .status-ok { color: #2e7d32; }
     .status-due { color: #f57c00; }
     .status-overdue { color: #c62828; }
     .hidden { display: none; }
-    input[type="file"] { display: none; }
     .log-entry { margin-bottom: 0.5em; }
     .log-entry input { width: auto; margin-right: 0.5em; }
+    input[type="file"] { display: none; }
+    .detail { background: white; padding: 1em; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); margin-top: 1em; }
+    .detail img { width: 100%; max-width: 300px; height: auto; object-fit: cover; border-radius: 8px; border: 1px solid #ccc; margin-bottom: 1em; }
+    label { display: block; margin-top: 0.5em; }
   </style>
 </head>
 <body>
   <h1>🌿 My Garden</h1>
   <div class="top-bar">
     <button class="btn" onclick="addPlant()">➕ Add Plant</button>
+    <button class="btn" onclick="waterAllPlants()">💧 Water All Plants</button>
     <button class="btn" onclick="exportGarden()">📤 Export</button>
     <button class="btn" onclick="importGarden()">📥 Import</button>
     <input type="file" id="import-file" onchange="loadGardenFile(this.files[0])">
   </div>
   <div class="summary" id="garden-summary"></div>
-  <div id="dashboard"></div>
-  <div id="plant-detail" class="hidden"></div>
+  <div id="dashboard" class="grid"></div>
+  <div id="plant-detail" class="hidden detail"></div>
 
   <script>
     let plants = [];
@@ -100,17 +104,16 @@
       renderDashboard();
     }
 
+    function waterAllPlants() {
+      const now = Date.now();
+      plants.forEach(p => p.waterings.push(now));
+      saveGarden();
+      renderDashboard();
+    }
+
     function getNextWateringDate(plant) {
       const last = plant.waterings[plant.waterings.length - 1];
       return last + plant.wateringInterval * 86400000;
-    }
-
-    function getTaskStatus(plant) {
-      const next = getNextWateringDate(plant);
-      const now = Date.now();
-      if (now > next) return "overdue";
-      if (now + 2 * 86400000 > next) return "due";
-      return "ok";
     }
 
     function renderDashboard() {
@@ -136,15 +139,15 @@
         card.onclick = () => showPlantDetail(i);
 
         const img = document.createElement("img");
-        img.src = p.photo || "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjZGNkY2RjIi8+PHRleHQgeD0i40%25IiB5PSI1MCUiIGR5PSIuMzVlbSIgZm9udC1zaXplPSIxNnB4IiBmaWxsPSIjNjY2Ij5ObyBQaG90bzwvdGV4dD48L3N2Zz4=";
+        img.src = p.photo || "https://via.placeholder.com/300x150?text=No+Photo";
 
         const content = document.createElement("div");
-        content.className = "card-content";
         content.innerHTML = `
-          <strong>${p.name}</strong> (${p.species})<br>
-          Growth Stage: ${stage}<br>
-          <span class="${statusClass}">Next watering: ${formatDate(nextWater)}</span><br>
-          Harvested: ${harvestSum} ${p.harvests[0]?.unit || ""}
+          <strong>${p.name}</strong><br>
+          ${p.species}<br>
+          Stage: ${stage}<br>
+          <span class="${statusClass}">Next: ${formatDate(nextWater)}</span><br>
+          🧺 ${harvestSum} ${p.harvests[0]?.unit || ""}
         `;
 
         card.appendChild(img);
@@ -169,24 +172,15 @@
       const container = document.createElement("div");
       container.innerHTML = `
         <h2>${p.name} Details</h2>
-        <label>Name: <input value="${p.name}" onchange="plants[${index}].name=this.value; saveGarden(); renderDashboard(); showPlantDetail(${index})"></label>
-      <label>Species: <input value="${p.species}" onchange="plants[${index}].species=this.value; saveGarden(); renderDashboard(); showPlantDetail(${index})"></label>
+        <img src="${p.photo || 'https://via.placeholder.com/300x150?text=No+Photo'}">
+        <label>Change Photo: <input type="file" accept="image/*" onchange="uploadPhoto(event, ${index})"></label>
+     <label>Name: <input value="${p.name}" onchange="plants[${index}].name=this.value; saveGarden(); renderDashboard(); showPlantDetail(${index})"></label>
+        <label>Species: <input value="${p.species}" onchange="plants[${index}].species=this.value; saveGarden(); renderDashboard(); showPlantDetail(${index})"></label>
         <label>Watering Interval (days): <input type="number" value="${p.wateringInterval}" onchange="plants[${index}].wateringInterval=parseInt(this.value); saveGarden(); renderDashboard(); showPlantDetail(${index})"></label>
         <label>Planted Date: <input type="date" value="${new Date(p.planted).toISOString().split('T')[0]}" onchange="plants[${index}].planted=new Date(this.value).getTime(); saveGarden(); renderDashboard(); showPlantDetail(${index})"></label>
         <p>🌱 Growth Stage: <strong>${stage}</strong> (${growthDays} days)</p>
         <p>🧺 Total Harvest: <strong>${totalHarvest} ${p.harvests[0]?.unit || ""}</strong></p>
       `;
-
-      const photoLabel = document.createElement("label");
-      photoLabel.innerHTML = `Photo: <input type="file" accept="image/*" onchange="uploadPhoto(event, ${index})">`;
-      container.appendChild(photoLabel);
-
-      if (p.photo) {
-        const img = document.createElement("img");
-        img.src = p.photo;
-        img.style = "width:120px;height:120px;margin-top:0.5em;border-radius:8px;border:1px solid #ccc;";
-        container.appendChild(img);
-      }
 
       const waterSection = document.createElement("div");
       waterSection.innerHTML = `<h3>💧 Watering History</h3>`;
