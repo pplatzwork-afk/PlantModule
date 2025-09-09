@@ -4,43 +4,39 @@
   <title>🌿 Plant Care Dashboard</title>
   <meta charset="UTF-8">
   <style>
-    body { font-family: 'Segoe UI', sans-serif; margin: 2em; background: #f0f4f8; color: #333; }
+    body { font-family: 'Segoe UI', sans-serif; margin: 1em; background: #f0f4f8; color: #333; }
     h1, h2, h3 { color: #2e7d32; }
-    .top-bar { display: flex; gap: 1em; margin-bottom: 1em; flex-wrap: wrap; }
-    .btn { padding: 0.6em 1em; background: #4caf50; color: white; border: none; border-radius: 6px; cursor: pointer; }
+    .top-bar { display: flex; flex-wrap: wrap; gap: 0.5em; margin-bottom: 1em; }
+    .btn { padding: 0.6em 1em; background: #4caf50; color: white; border: none; border-radius: 6px; cursor: pointer; flex: 1; min-width: 120px; }
     .btn:hover { background: #388e3c; }
-    .summary { font-weight: bold; margin-bottom: 1em; font-size: 1.1em; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1em; }
-    .card { background: white; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); padding: 1em; display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: background 0.2s ease; }
-    .card:hover { background: #e8f5e9; }
-    .card img { width: 100%; height: 150px; object-fit: cover; border-radius: 8px; border: 1px solid #ccc; margin-bottom: 0.5em; }
+    .summary { font-weight: bold; margin-bottom: 1em; font-size: 1em; }
+    .card { background: white; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); padding: 1em; margin-bottom: 1em; }
+    .card img { width: 100%; height: auto; object-fit: cover; border-radius: 8px; border: 1px solid #ccc; margin-bottom: 0.5em; }
     .status-ok { color: #2e7d32; }
     .status-due { color: #f57c00; }
     .status-overdue { color: #c62828; }
-    .hidden { display: none; }
     .log-entry { margin-bottom: 0.5em; }
-    .log-entry input { width: auto; margin-right: 0.5em; }
+    .log-entry input { margin-right: 0.5em; }
     input[type="file"] { display: none; }
-    .detail { background: white; padding: 1em; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); margin-top: 1em; }
-    .detail img { width: 100%; max-width: 300px; height: auto; object-fit: cover; border-radius: 8px; border: 1px solid #ccc; margin-bottom: 1em; }
     label { display: block; margin-top: 0.5em; }
+    .detail { margin-top: 1em; padding-top: 1em; border-top: 1px solid #ccc; }
   </style>
 </head>
 <body>
   <h1>🌿 My Garden</h1>
   <div class="top-bar">
     <button class="btn" onclick="addPlant()">➕ Add Plant</button>
-    <button class="btn" onclick="waterAllPlants()">💧 Water All Plants</button>
+    <button class="btn" onclick="waterAllPlants()">💧 Water All</button>
     <button class="btn" onclick="exportGarden()">📤 Export</button>
     <button class="btn" onclick="importGarden()">📥 Import</button>
     <input type="file" id="import-file" onchange="loadGardenFile(this.files[0])">
   </div>
   <div class="summary" id="garden-summary"></div>
-  <div id="dashboard" class="grid"></div>
-  <div id="plant-detail" class="hidden detail"></div>
+  <div id="dashboard"></div>
 
   <script>
     let plants = [];
+    let selectedPlantIndex = null;
 
     function formatDate(ts) {
       return new Date(ts).toLocaleDateString();
@@ -117,7 +113,6 @@
     }
 
     function renderDashboard() {
-      document.getElementById("plant-detail").classList.add("hidden");
       const dash = document.getElementById("dashboard");
       dash.innerHTML = "";
       let overdue = 0, totalHarvest = 0;
@@ -136,7 +131,6 @@
 
         const card = document.createElement("div");
         card.className = "card";
-        card.onclick = () => showPlantDetail(i);
 
         const img = document.createElement("img");
         img.src = p.photo || "https://via.placeholder.com/300x150?text=No+Photo";
@@ -152,103 +146,89 @@
 
         card.appendChild(img);
         card.appendChild(content);
+
+        const toggleBtn = document.createElement("button");
+        toggleBtn.className = "btn";
+        toggleBtn.textContent = selectedPlantIndex === i ? "⬆ Hide Details" : "⬇ Show Details";
+        toggleBtn.onclick = () => {
+          selectedPlantIndex = selectedPlantIndex === i ? null : i;
+          renderDashboard();
+        };
+        card.appendChild(toggleBtn);
+
+        if (selectedPlantIndex === i) {
+          const detail = document.createElement("div");
+          detail.className = "detail";
+
+          detail.innerHTML = `
+            <label>Change Photo: <input type="file" accept="image/*" onchange="uploadPhoto(event, ${i})"></label>
+            <label>Name: <input value="${p.name}" onchange="plants[${i}].name=this.value; saveGarden(); renderDashboard()"></label>
+            <label>Species: <input value="${p.species}" onchange="plants[${i}].species=this.value; saveGarden(); renderDashboard()"></label>
+            <label>Watering Interval (days): <input type="number" value="${p.wateringInterval}" onchange="plants[${i}].wateringInterval=parseInt(this.value); saveGarden(); renderDashboard()"></label>
+            <label>Planted Date: <input type="date" value="${new Date(p.planted).toISOString().split('T')[0]}" onchange="plants[${i}].planted=new Date(this.value).getTime(); saveGarden(); renderDashboard()"></label>
+            <h3>💧 Watering History</h3>
+          `;
+
+          p.waterings.forEach((w, wi) => {
+            const entry = document.createElement("div");
+            entry.className = "log-entry";
+            entry.innerHTML = `
+              <input type="date" value="${new Date(w).toISOString().split('T')[0]}"
+                onchange="plants[${i}].waterings[${wi}]=new Date(this.value).getTime(); saveGarden(); renderDashboard()">
+              <button onclick="plants[${i}].waterings.splice(${wi},1); saveGarden(); renderDashboard()">🗑️</button>
+            `;
+            detail.appendChild(entry);
+          });
+
+          const addWaterBtn = document.createElement("button");
+          addWaterBtn.className = "btn";
+          addWaterBtn.textContent = "💧 Add Watering";
+          addWaterBtn.onclick = () => {
+            plants[i].waterings.push(Date.now());
+            saveGarden();
+            renderDashboard();
+          };
+          detail.appendChild(addWaterBtn);
+
+          detail.innerHTML += `<h3>🧺 Harvest History</h3>`;
+          plants[i].harvests.forEach((h, hi) => {
+            const entry = document.createElement("div");
+            entry.className = "log-entry";
+            entry.innerHTML = `
+              <input type="date" value="${new Date(h.date).toISOString().split('T')[0]}"
+                onchange="plants[${i}].harvests[${hi}].date=new Date(this.value).getTime(); saveGarden(); renderDashboard()">
+              <input type="number" value="${h.amount}" onchange="plants[${i}].harvests[${hi}].amount=parseInt(this.value); saveGarden(); renderDashboard()">
+              <input type="text" value="${h.unit}" onchange="plants[${i}].harvests[${hi}].unit=this.value; saveGarden(); renderDashboard()">
+              <button onclick="plants[${i}].harvests.splice(${hi},1); saveGarden(); renderDashboard()">🗑️</button>
+            `;
+            detail.appendChild(entry);
+          });
+
+          const amtInput = document.createElement("input");
+          amtInput.id = "harvest-amount";
+          amtInput.type = "number";
+          amtInput.placeholder = "Amount";
+          const unitInput = document.createElement("input");
+          unitInput.id = "harvest-unit";
+          unitInput.type = "text";
+          unitInput.placeholder = "Unit (e.g. grams)";
+          const recordBtn = document.createElement("button");
+          recordBtn.className = "btn";
+          recordBtn.textContent = "🧺 Record Harvest";
+          recordBtn.onclick = () => recordHarvest(i);
+
+          detail.appendChild(amtInput);
+          detail.appendChild(unitInput);
+          detail.appendChild(recordBtn);
+
+          card.appendChild(detail);
+        }
+
         dash.appendChild(card);
       });
 
       document.getElementById("garden-summary").textContent =
         `🌱 ${plants.length} plant(s) | 🔔 ${overdue} overdue | 🧺 ${totalHarvest} total harvest units`;
-    }
-
-    function showPlantDetail(index) {
-      const p = plants[index];
-      const detail = document.getElementById("plant-detail");
-      detail.className = "detail";
-      detail.innerHTML = "";
-
-      const growthDays = daysBetween(p.planted, Date.now());
-      const stage = getGrowthStage(growthDays);
-      const totalHarvest = p.harvests.reduce((sum, h) => sum + h.amount, 0);
-
-      const container = document.createElement("div");
-      container.innerHTML = `
-        <h2>${p.name} Details</h2>
-        <img src="${p.photo || 'https://via.placeholder.com/300x150?text=No+Photo'}">
-        <label>Change Photo: <input type="file" accept="image/*" onchange="uploadPhoto(event, ${index})"></label>
-     <label>Name: <input value="${p.name}" onchange="plants[${index}].name=this.value; saveGarden(); renderDashboard(); showPlantDetail(${index})"></label>
-        <label>Species: <input value="${p.species}" onchange="plants[${index}].species=this.value; saveGarden(); renderDashboard(); showPlantDetail(${index})"></label>
-        <label>Watering Interval (days): <input type="number" value="${p.wateringInterval}" onchange="plants[${index}].wateringInterval=parseInt(this.value); saveGarden(); renderDashboard(); showPlantDetail(${index})"></label>
-        <label>Planted Date: <input type="date" value="${new Date(p.planted).toISOString().split('T')[0]}" onchange="plants[${index}].planted=new Date(this.value).getTime(); saveGarden(); renderDashboard(); showPlantDetail(${index})"></label>
-        <p>🌱 Growth Stage: <strong>${stage}</strong> (${growthDays} days)</p>
-        <p>🧺 Total Harvest: <strong>${totalHarvest} ${p.harvests[0]?.unit || ""}</strong></p>
-      `;
-
-      const waterSection = document.createElement("div");
-      waterSection.innerHTML = `<h3>💧 Watering History</h3>`;
-      p.waterings.forEach((w, wi) => {
-        const entry = document.createElement("div");
-        entry.className = "log-entry";
-        entry.innerHTML = `
-          <input type="date" value="${new Date(w).toISOString().split('T')[0]}"
-            onchange="plants[${index}].waterings[${wi}]=new Date(this.value).getTime(); saveGarden(); renderDashboard(); showPlantDetail(${index})">
-          <button onclick="plants[${index}].waterings.splice(${wi},1); saveGarden(); renderDashboard(); showPlantDetail(${index})">🗑️</button>
-        `;
-        waterSection.appendChild(entry);
-      });
-      const addWaterBtn = document.createElement("button");
-      addWaterBtn.className = "btn";
-      addWaterBtn.textContent = "💧 Add Watering";
-      addWaterBtn.onclick = () => {
-        plants[index].waterings.push(Date.now());
-        saveGarden();
-        renderDashboard();
-        showPlantDetail(index);
-      };
-      waterSection.appendChild(addWaterBtn);
-
-      const harvestSection = document.createElement("div");
-      harvestSection.innerHTML = `<h3>🧺 Harvest History</h3>`;
-      p.harvests.forEach((h, hi) => {
-        const entry = document.createElement("div");
-        entry.className = "log-entry";
-        entry.innerHTML = `
-          <input type="date" value="${new Date(h.date).toISOString().split('T')[0]}"
-            onchange="plants[${index}].harvests[${hi}].date=new Date(this.value).getTime(); saveGarden(); renderDashboard(); showPlantDetail(${index})">
-          <input type="number" value="${h.amount}" onchange="plants[${index}].harvests[${hi}].amount=parseInt(this.value); saveGarden(); renderDashboard(); showPlantDetail(${index})">
-          <input type="text" value="${h.unit}" onchange="plants[${index}].harvests[${hi}].unit=this.value; saveGarden(); renderDashboard(); showPlantDetail(${index})">
-          <button onclick="plants[${index}].harvests.splice(${hi},1); saveGarden(); renderDashboard(); showPlantDetail(${index})">🗑️</button>
-        `;
-        harvestSection.appendChild(entry);
-      });
-
-      const amtInput = document.createElement("input");
-      amtInput.id = "harvest-amount";
-      amtInput.type = "number";
-      amtInput.placeholder = "Amount";
-      const unitInput = document.createElement("input");
-      unitInput.id = "harvest-unit";
-      unitInput.type = "text";
-      unitInput.placeholder = "Unit (e.g. grams)";
-      const recordBtn = document.createElement("button");
-      recordBtn.className = "btn";
-      recordBtn.textContent = "🧺 Record Harvest";
-      recordBtn.onclick = () => recordHarvest(index);
-
-      harvestSection.appendChild(amtInput);
-      harvestSection.appendChild(unitInput);
-      harvestSection.appendChild(recordBtn);
-
-      const backBtn = document.createElement("button");
-      backBtn.className = "btn";
-      backBtn.textContent = "⬅ Back to Dashboard";
-      backBtn.onclick = () => {
-        detail.className = "hidden";
-        renderDashboard();
-      };
-
-      detail.appendChild(container);
-      detail.appendChild(waterSection);
-      detail.appendChild(harvestSection);
-      detail.appendChild(backBtn);
     }
 
     function uploadPhoto(event, index) {
@@ -259,7 +239,6 @@
         plants[index].photo = e.target.result;
         saveGarden();
         renderDashboard();
-        showPlantDetail(index);
       };
       reader.readAsDataURL(file);
     }
@@ -271,7 +250,6 @@
       plants[index].harvests.push({ date: Date.now(), amount: amt, unit });
       saveGarden();
       renderDashboard();
-      showPlantDetail(index);
     }
 
     loadGarden();
